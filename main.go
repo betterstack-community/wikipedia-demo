@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"net/http/httputil"
@@ -75,9 +74,11 @@ func (s *Search) PreviousPage() int {
 type handlerWithError func(w http.ResponseWriter, r *http.Request) error
 
 func (fn handlerWithError) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	l := zerolog.Ctx(r.Context())
+
 	err := fn(w, r)
 	if err != nil {
-		log.Println(err)
+		l.Error().Err(err).Msg("server error")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
