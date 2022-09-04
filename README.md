@@ -1,24 +1,31 @@
-# Title of the project
+# Wikipedia Search Application
 
-Description of the project.
+**Tutorial**: [A Complete Guide to Logging in Go with Zerolog]().
 
-**Tutorial**: [Link to corresponding BetterStack tutorial]().
-
-![Screenshot or GIF of the application in action](screenshot.png).
+![Screenshot or GIF of the application in action](screenshot.png)
 
 ## 🟢 Prerequisites
 
-A list of requirements and package versions that the reader needs to build and run the project.
-
-- The first thing.
-- The second thing.
+You must have the latest version of Go installed on your machine. This project
+was tested against Go 1.19.
 
 ## 📦 Getting started
 
-A brief guide to setting up the project.
+- Clone this repo to your machine:
 
-- Do the first thing.
-- Do the next thing.
+```bash
+git clone https://github.com/betterstack-community/wikipedia-demo
+```
+
+- `cd` into the project folder and run `go mod tidy` to download dependencies.
+- Execute the command below to start the development server:
+
+```bash
+go build && ./wikipedia-demo
+
+```
+
+- Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## ⚖ License
 
