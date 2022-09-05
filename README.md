@@ -1,6 +1,6 @@
 # Wikipedia Search Application
 
-**Tutorial**: [A Complete Guide to Logging in Go with Zerolog]().
+**Tutorial**: [A Complete Guide to Logging in Go with Zerolog](https://betterstack.com/community/guides/logging/zerolog/).
 
 ![Screenshot or GIF of the application in action](screenshot.png)
 
