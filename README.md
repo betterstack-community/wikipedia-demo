@@ -46,6 +46,8 @@ go build && ./wikipedia-demo
 - Enter a search query, and view the corresponding logs in your console and in
   the `wikipedia-demo.log` file.
 
+![Application Logs](logs.png)
+
 ## ⚖ License
 
 The code used in this project and in the linked tutorial are licensed under the
