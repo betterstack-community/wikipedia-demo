@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <title>News App Demo</title>
+    <title>Wikipedia Search App</title>
     <link rel="stylesheet" href="/assets/style.css" />
   </head>
   <body>
@@ -40,10 +40,7 @@
           .Results.Query.SeachInfo.TotalResults 0) }} No results found for your
           query: <strong>{{ .Query }}</strong>.
         </p>
-        {{ end }}
-        {{ end }}
-
-        {{ range .Results.Query.Search }}
+        {{ end }} {{ end }} {{ range .Results.Query.Search }}
         <li class="result-item">
           <h3 class="result-title">
             <a
@@ -65,22 +62,19 @@
         {{ end }}
       </ul>
       <div class="pagination">
-        {{ if .Results }}
-        {{ if (gt .NextPage 2) }}
+        {{ if .Results }} {{ if (gt .NextPage 2) }}
         <a
           href="/search?q={{ .Query }}&page={{ .PreviousPage }}"
           class="button previous-page"
           >Previous</a
         >
-        {{ end }}
-        {{ if (ne .IsLastPage true) }}
+        {{ end }} {{ if (ne .IsLastPage true) }}
         <a
           href="/search?q={{ .Query }}&page={{ .NextPage }}"
           class="button next-page"
           >Next</a
         >
-        {{ end }}
-        {{ end }}
+        {{ end }} {{ end }}
       </div>
     </main>
   </body>
