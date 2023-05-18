@@ -17,7 +17,7 @@ import (
 
 	"github.com/betterstack-community/wikipedia-demo/logger"
 	"github.com/rs/xid"
-	"github.com/rs/zerolog"
+	"go.uber.org/zap"
 )
 
 var tpl *template.Template
@@ -29,13 +29,10 @@ var HTTPClient = http.Client{
 type WikipediaSearchResponse struct {
 	BatchComplete string `json:"batchcomplete"`
 	Continue      struct {
-		Sroffset int    `json:"sroffset"`
 		Continue string `json:"continue"`
+		Sroffset int    `json:"sroffset"`
 	} `json:"continue"`
 	Query struct {
-		SearchInfo struct {
-			TotalHits int `json:"totalhits"`
-		} `json:"searchinfo"`
 		Search []struct {
 			Ns        int       `json:"ns"`
 			Title     string    `json:"title"`
@@ -45,6 +42,9 @@ type WikipediaSearchResponse struct {
 			Snippet   string    `json:"snippet"`
 			Timestamp time.Time `json:"timestamp"`
 		} `json:"search"`
+		SearchInfo struct {
+			TotalHits int `json:"totalhits"`
+		} `json:"searchinfo"`
 	} `json:"query"`
 }
 
@@ -74,11 +74,11 @@ func (s *Search) PreviousPage() int {
 type handlerWithError func(w http.ResponseWriter, r *http.Request) error
 
 func (fn handlerWithError) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	l := zerolog.Ctx(r.Context())
+	l := logger.FromCtx(r.Context())
 
 	err := fn(w, r)
 	if err != nil {
-		l.Error().Err(err).Msg("server error")
+		l.Error("server error", zap.Error(err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -105,12 +105,11 @@ func indexHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	buf := &bytes.Buffer{}
+
 	err := tpl.Execute(buf, nil)
 	if err != nil {
 		return err
 	}
-
-	// panic("AN ERROR!")
 
 	_, err = buf.WriteTo(w)
 
@@ -121,14 +120,16 @@ func searchWikipedia(
 	searchQuery string,
 	pageSize, resultsOffset int,
 ) (*WikipediaSearchResponse, error) {
-	resp, err := HTTPClient.Get(
-		fmt.Sprintf(
-			"https://en.wikipedia.org/w/api.php?action=query&list=search&prop=info&inprop=url&utf8=&format=json&origin=*&srlimit=%d&srsearch=%s&sroffset=%d",
-			pageSize,
-			searchQuery,
-			resultsOffset,
-		),
+	endpoint := fmt.Sprintf(
+		"https://en.wikipedia.org/w/api.php?action=query&list=search&prop=info&inprop=url&utf8=&format=json&origin=*&srlimit=%d&srsearch=%s&sroffset=%d",
+		pageSize,
+		searchQuery,
+		resultsOffset,
 	)
+
+	fmt.Println(endpoint)
+
+	resp, err := HTTPClient.Get(endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -167,19 +168,26 @@ func searchHandler(w http.ResponseWriter, r *http.Request) error {
 
 	params := u.Query()
 	searchQuery := params.Get("q")
+
 	pageNum := params.Get("page")
 	if pageNum == "" {
 		pageNum = "1"
 	}
 
-	l := zerolog.Ctx(r.Context())
+	l := logger.FromCtx(r.Context())
 
-	l.UpdateContext(func(c zerolog.Context) zerolog.Context {
-		return c.Str("search_query", searchQuery).Str("page_num", pageNum)
-	})
+	l = l.With(
+		zap.String("search_query", searchQuery),
+		zap.String("page_num", pageNum),
+	)
 
-	l.Info().
-		Msgf("incoming search query '%s' on page '%s'", searchQuery, pageNum)
+	l.Info(
+		fmt.Sprintf(
+			"incoming search query '%s' on page '%s'",
+			searchQuery,
+			pageNum,
+		),
+	)
 
 	nextPage, err := strconv.Atoi(pageNum)
 	if err != nil {
@@ -195,7 +203,10 @@ func searchHandler(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	l.Debug().Interface("wikipedia_search_response", searchResponse).Send()
+	l.Debug(
+		"search response from Wikipedia",
+		zap.Any("wikipedia_search_response", searchResponse),
+	)
 
 	totalHits := searchResponse.Query.SearchInfo.TotalHits
 
@@ -207,6 +218,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	buf := &bytes.Buffer{}
+
 	err = tpl.Execute(buf, search)
 	if err != nil {
 		return err
@@ -217,7 +229,7 @@ func searchHandler(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	l.Trace().Msgf("search query '%s' succeeded without errors", searchQuery)
+	l.Info("search query succeeded without errors")
 
 	return nil
 }
@@ -234,15 +246,13 @@ func requestLogger(next http.Handler) http.Handler {
 
 		r = r.WithContext(ctx)
 
-		l.UpdateContext(func(c zerolog.Context) zerolog.Context {
-			return c.Str("correlation_id", correlationID)
-		})
+		l = l.With(zap.String("correlation_id", correlationID))
 
 		w.Header().Add("X-Correlation-ID", correlationID)
 
 		lrw := newLoggingResponseWriter(w)
 
-		r = r.WithContext(l.WithContext(r.Context()))
+		r = r.WithContext(logger.WithContext(ctx, l))
 
 		defer func() {
 			panicVal := recover()
@@ -251,14 +261,14 @@ func requestLogger(next http.Handler) http.Handler {
 				panic(panicVal)
 			}
 
-			l.
-				Info().
-				Str("method", r.Method).
-				Str("url", r.URL.RequestURI()).
-				Str("user_agent", r.UserAgent()).
-				Int("status_code", lrw.statusCode).
-				Dur("elapsed_ms", time.Since(start)).
-				Msg("incoming request")
+			l.Info(
+				"incoming request",
+				zap.String("method", r.Method),
+				zap.String("url", r.URL.RequestURI()),
+				zap.String("user_agent", r.UserAgent()),
+				zap.Int("status_code", lrw.statusCode),
+				zap.Duration("elapsed_ms", time.Since(start)),
+			)
 		}()
 
 		next.ServeHTTP(lrw, r)
@@ -278,7 +288,7 @@ func init() {
 		"htmlSafe": htmlSafe,
 	}).ParseFiles("index.html")
 	if err != nil {
-		l.Fatal().Err(err).Msg("Unable to initialize HTML templates")
+		l.Fatal("Unable to initialize HTML templates", zap.Error(err))
 	}
 }
 
@@ -297,11 +307,13 @@ func main() {
 	mux.Handle("/search", handlerWithError(searchHandler))
 	mux.Handle("/", handlerWithError(indexHandler))
 
-	l.Info().
-		Str("port", port).
-		Msgf("Starting Wikipedia App Server on port '%s'", port)
+	l.Info(
+		"Starting Wikipedia App Server on port: "+port,
+		zap.String("port", port),
+	)
 
-	l.Fatal().
-		Err(http.ListenAndServe(":"+port, requestLogger(mux))).
-		Msg("Wikipedia App Server Closed")
+	l.Fatal(
+		"Wikipedia App Server Closed",
+		zap.Error(http.ListenAndServe(":"+port, requestLogger(mux))),
+	)
 }
